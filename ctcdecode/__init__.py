@@ -4,10 +4,10 @@ import torch
 
 class CTCBeamDecoder(object):
     def __init__(self, labels, model_path=None, alpha=0, beta=0, cutoff_top_n=40, cutoff_prob=1.0, beam_width=100,
-                 num_processes=4, blank_id=0):
+                 num_processes=4, blank_id=0, add_model_path=None, add_alpha=0, add_beta=0):
         self.cutoff_top_n = cutoff_top_n
         self._beam_width = beam_width
-        self._scorer = None
+        self._scorer, self._add_scorer = None, None
         self._num_processes = num_processes
         self._labels = ''.join(labels).encode()
         self._num_labels = len(labels)
@@ -15,6 +15,9 @@ class CTCBeamDecoder(object):
         if model_path:
             self._scorer = ctc_decode.paddle_get_scorer(alpha, beta, model_path.encode(), self._labels,
                                                         self._num_labels)
+        if model_path:
+            self._add_scorer = ctc_decode.paddle_get_scorer(add_alpha, add_beta, add_model_path.encode(), self._labels,
+                                                            self._num_labels)
         self._cutoff_prob = cutoff_prob
 
     def decode(self, probs, seq_lens=None):
@@ -30,13 +33,21 @@ class CTCBeamDecoder(object):
         scores = torch.FloatTensor(batch_size, self._beam_width).cpu().float()
         out_seq_len = torch.IntTensor(batch_size, self._beam_width).cpu().int()
         if self._scorer:
-            ctc_decode.paddle_beam_decode_lm(probs, seq_lens, self._labels, self._num_labels, self._beam_width,
-                                             self._num_processes, self._cutoff_prob, self.cutoff_top_n, self._blank_id,
-                                             self._scorer, output, timesteps, scores, out_seq_len)
+            if self._add_scorer:
+
+                ctc_decode.paddle_beam_decode_lm_add(probs, seq_lens, self._labels, self._num_labels, self._beam_width,
+                                                     self._num_processes, self._cutoff_prob, self.cutoff_top_n,
+                                                     self._blank_id, self._scorer, self._add_scorer,
+                                                     output, timesteps, scores, out_seq_len)
+            else:
+                ctc_decode.paddle_beam_decode_lm(probs, seq_lens, self._labels, self._num_labels, self._beam_width,
+                                                 self._num_processes, self._cutoff_prob, self.cutoff_top_n,
+                                                 self._blank_id,
+                                                 self._scorer, output, timesteps, scores, out_seq_len)
         else:
-            ctc_decode.paddle_beam_decode(probs, seq_lens, self._labels, self._num_labels, self._beam_width, self._num_processes,
-                                          self._cutoff_prob, self.cutoff_top_n, self._blank_id, output, timesteps,
-                                          scores, out_seq_len)
+            ctc_decode.paddle_beam_decode(probs, seq_lens, self._labels, self._num_labels, self._beam_width,
+                                          self._num_processes, self._cutoff_prob, self.cutoff_top_n, self._blank_id,
+                                          output, timesteps, scores, out_seq_len)
 
         return output, scores, timesteps, out_seq_len
 

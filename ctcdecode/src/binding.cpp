@@ -32,6 +32,7 @@ int beam_decode(THFloatTensor *th_probs,
                 size_t cutoff_top_n,
                 size_t blank_id,
                 void *scorer,
+                void *add_scorer,
                 THIntTensor *th_output,
                 THIntTensor *th_timesteps,
                 THFloatTensor *th_scores,
@@ -42,6 +43,10 @@ int beam_decode(THFloatTensor *th_probs,
     Scorer *ext_scorer = NULL;
     if (scorer != NULL) {
         ext_scorer = static_cast<Scorer *>(scorer);
+    }
+    Scorer *add_ext_scorer = NULL;
+    if (add_scorer != NULL) {
+        add_ext_scorer = static_cast<Scorer *>(add_scorer);
     }
     const int64_t max_time = THFloatTensor_size(th_probs, 1);
     const int64_t batch_size = THFloatTensor_size(th_probs, 0);
@@ -62,7 +67,7 @@ int beam_decode(THFloatTensor *th_probs,
     }
 
     std::vector<std::vector<std::pair<double, Output>>> batch_results =
-    ctc_beam_search_decoder_batch(inputs, new_vocab, beam_size, num_processes, cutoff_prob, cutoff_top_n, blank_id, ext_scorer);
+    ctc_beam_search_decoder_batch(inputs, new_vocab, beam_size, num_processes, cutoff_prob, cutoff_top_n, blank_id, ext_scorer, add_ext_scorer);
 
     for (int b = 0; b < batch_results.size(); ++b){
         std::vector<std::pair<double, Output>> results = batch_results[b];
@@ -101,7 +106,7 @@ extern "C"
                                THIntTensor *th_out_length){
 
             return beam_decode(th_probs, th_seq_lens, labels, vocab_size, beam_size, num_processes,
-                        cutoff_prob, cutoff_top_n, blank_id,NULL, th_output, th_timesteps, th_scores, th_out_length);
+                        cutoff_prob, cutoff_top_n, blank_id, NULL, th_output, th_timesteps, th_scores, th_out_length);
         }
 
         int paddle_beam_decode_lm(THFloatTensor *th_probs,
@@ -120,7 +125,27 @@ extern "C"
                                   THIntTensor *th_out_length){
 
             return beam_decode(th_probs, th_seq_lens, labels, vocab_size, beam_size, num_processes,
-                        cutoff_prob, cutoff_top_n, blank_id,scorer, th_output, th_timesteps, th_scores, th_out_length);
+                        cutoff_prob, cutoff_top_n, blank_id, scorer, NULL, th_output, th_timesteps, th_scores, th_out_length);
+        }
+
+        int paddle_beam_decode_lm_add(THFloatTensor *th_probs,
+                                  THIntTensor *th_seq_lens,
+                                  const char* labels,
+                                  int vocab_size,
+                                  size_t beam_size,
+                                  size_t num_processes,
+                                  double cutoff_prob,
+                                  size_t cutoff_top_n,
+                                  size_t blank_id,
+                                  void *scorer,
+                                  void *add_scorer,
+                                  THIntTensor *th_output,
+                                  THIntTensor *th_timesteps,
+                                  THFloatTensor *th_scores,
+                                  THIntTensor *th_out_length){
+
+            return beam_decode(th_probs, th_seq_lens, labels, vocab_size, beam_size, num_processes,
+                        cutoff_prob, cutoff_top_n, blank_id, scorer, NULL, th_output, th_timesteps, th_scores, th_out_length);
         }
 
 

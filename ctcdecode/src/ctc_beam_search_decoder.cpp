@@ -21,7 +21,8 @@ std::vector<std::pair<double, Output>> ctc_beam_search_decoder(
     double cutoff_prob,
     size_t cutoff_top_n,
     size_t blank_id,
-    Scorer *ext_scorer) {
+    Scorer *ext_scorer,
+    Scorer *add_ext_scorer) {
   // dimension check
   size_t num_time_steps = probs_seq.size();
   for (size_t i = 0; i < num_time_steps; ++i) {
@@ -49,11 +50,15 @@ std::vector<std::pair<double, Output>> ctc_beam_search_decoder(
   prefixes.push_back(&root);
 
   if (ext_scorer != nullptr && !ext_scorer->is_character_based()) {
-    auto fst_dict = static_cast<fst::StdVectorFst *>(ext_scorer->dictionary);
-    fst::StdVectorFst *dict_ptr = fst_dict->Copy(true);
-    root.set_dictionary(dict_ptr);
-    auto matcher = std::make_shared<FSTMATCH>(*dict_ptr, fst::MATCH_INPUT);
-    root.set_matcher(matcher);
+    if (add_ext_scorer != nullptr && !add_ext_scorer->is_character_based()) {
+        // Create dictionary from a union of both dictionaries
+    } else {
+        auto fst_dict = static_cast<fst::StdVectorFst *>(ext_scorer->dictionary);
+        fst::StdVectorFst *dict_ptr = fst_dict->Copy(true);
+        root.set_dictionary(dict_ptr);
+        auto matcher = std::make_shared<FSTMATCH>(*dict_ptr, fst::MATCH_INPUT);
+        root.set_matcher(matcher);
+    }
   }
 
   // prefix search over time
@@ -196,7 +201,7 @@ ctc_beam_search_decoder_batch(
     double cutoff_prob,
     size_t cutoff_top_n,
     size_t blank_id,
-    Scorer *ext_scorer) {
+    Scorer *ext_scorer, Scorer *add_ext_scorer) {
   VALID_CHECK_GT(num_processes, 0, "num_processes must be nonnegative!");
   // thread pool
   ThreadPool pool(num_processes);
@@ -213,7 +218,8 @@ ctc_beam_search_decoder_batch(
                                   cutoff_prob,
                                   cutoff_top_n,
                                   blank_id,
-                                  ext_scorer));
+                                  ext_scorer,
+                                  add_ext_scorer));
   }
 
   // get decoding results
