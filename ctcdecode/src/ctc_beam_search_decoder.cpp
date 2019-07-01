@@ -68,6 +68,7 @@ std::vector<std::pair<double, Output>> ctc_beam_search_decoder(
       std::sort(
           prefixes.begin(), prefixes.begin() + num_prefixes, prefix_compare);
       float blank_prob = log_input ? prob[blank_id] : std::log(prob[blank_id]);
+      // 为什么要减去beta？
       min_cutoff = prefixes[num_prefixes - 1]->score +
                    blank_prob - std::max(0.0, ext_scorer->beta);
       full_beam = (num_prefixes == beam_size);
@@ -87,12 +88,18 @@ std::vector<std::pair<double, Output>> ctc_beam_search_decoder(
         }
         // blank
         if (c == blank_id) {
+          // c 为blank时，只更新blank的概率
+          // 因为 blank + blank = blank
+          // no blank + blank = blank
+          // 所以 使用 p_c * (p_b + p_nb)
           prefix->log_prob_b_cur =
               log_sum_exp(prefix->log_prob_b_cur, log_prob_c + prefix->score);
           continue;
         }
         // repeated character
         if (c == prefix->character) {
+          // c 等于prefix的最后一个字符时，只更新no blank的概率
+          // p_c * p_nb
           prefix->log_prob_nb_cur = log_sum_exp(
               prefix->log_prob_nb_cur, log_prob_c + prefix->log_prob_nb_prev);
         }
@@ -104,6 +111,7 @@ std::vector<std::pair<double, Output>> ctc_beam_search_decoder(
 
           if (c == prefix->character &&
               prefix->log_prob_b_prev > -NUM_FLT_INF) {
+            // c 等于prefix的最后一个字符 且  p_nb_pre 不等于0，则新的p_c = p_c * p_nb_pre
             log_p = log_prob_c + prefix->log_prob_b_prev;
           } else if (c != prefix->character) {
             log_p = log_prob_c + prefix->score;
@@ -112,6 +120,8 @@ std::vector<std::pair<double, Output>> ctc_beam_search_decoder(
           // language model scoring
           if (ext_scorer != nullptr &&
               (c == space_id || ext_scorer->is_character_based())) {
+
+            // 当前字符是 空格 或者 使用基于char的LM时 考虑LM加权
             PathTrie *prefix_to_score = nullptr;
             // skip scoring the space
             if (ext_scorer->is_character_based()) {
@@ -122,8 +132,10 @@ std::vector<std::pair<double, Output>> ctc_beam_search_decoder(
 
             float score = 0.0;
             std::vector<std::string> ngram;
+            // 根据当前节点，往父节点找 找到 ngram对应的单词或者 字母
             ngram = ext_scorer->make_ngram(prefix_to_score);
             score = ext_scorer->get_log_cond_prob(ngram) * ext_scorer->alpha;
+            // 更新后的概率为p * p_text^alpha * beta
             log_p += score;
             log_p += ext_scorer->beta;
           }
@@ -136,6 +148,8 @@ std::vector<std::pair<double, Output>> ctc_beam_search_decoder(
 
     prefixes.clear();
     // update log probs
+    // 经root节点递归push到prefixes中，同时更新每个prefix节点的probs
+    // 更新后的 p_b_cur 和 p_nb_cur 都为0
     root.iterate_to_vec(prefixes);
 
     // only preserve top beam_size prefixes
@@ -178,6 +192,7 @@ std::vector<std::pair<double, Output>> ctc_beam_search_decoder(
       auto prefix_length = output.size();
       auto words = ext_scorer->split_labels(output);
       // remove word insert
+      // beta 的数目为什么是prefix_length?而不是等于alpha对应的数目？
       approx_ctc = approx_ctc - prefix_length * ext_scorer->beta;
       // remove language model weight:
       approx_ctc -= (ext_scorer->get_sent_log_prob(words)) * ext_scorer->alpha;

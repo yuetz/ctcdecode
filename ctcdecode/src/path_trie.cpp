@@ -141,6 +141,24 @@ void PathTrie::iterate_to_vec(std::vector<PathTrie*>& output) {
   }
 }
 
+
+// void PathTrie::iterate_to_vec(std::vector<PathTrie*>& output) {
+//  只考虑孩子节点，实验效果不好。
+//   if (exists_) {
+//     log_prob_b_prev = log_prob_b_cur;
+//     log_prob_nb_prev = log_prob_nb_cur;
+
+//     log_prob_b_cur = -NUM_FLT_INF;
+//     log_prob_nb_cur = -NUM_FLT_INF;
+
+//     score = log_sum_exp(log_prob_b_prev, log_prob_nb_prev);
+//     output.push_back(this);
+//   }
+//   for (auto child : children_) {
+//     child.second->iterate_to_vec(output);
+//   }
+// }
+
 void PathTrie::remove() {
   exists_ = false;
 

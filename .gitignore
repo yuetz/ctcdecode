@@ -137,3 +137,4 @@ ENV/
 *.app
 
 ctcdecode/ctcdecode.xcodeproj/
+.idea/*

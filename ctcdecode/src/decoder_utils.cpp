@@ -19,14 +19,17 @@ std::vector<std::pair<size_t, float>> get_pruned_log_probs(
   if (log_cutoff_prob < 0.0 || cutoff_top_n < cutoff_len) {
     std::sort(
         prob_idx.begin(), prob_idx.end(), pair_comp_second_rev<int, double>);
-    if (cutoff_prob < 0.0) {
+    if (log_cutoff_prob < 0.0) {
       double cum_prob = 0.0;
       cutoff_len = 0;
       for (size_t i = 0; i < prob_idx.size(); ++i) {
         cum_prob = log_sum_exp(cum_prob, log_input ? prob_idx[i].second : log(prob_idx[i].second) );
         cutoff_len += 1;
         if (cum_prob >= cutoff_prob || cutoff_len >= cutoff_top_n) break;
+      }else{
+        cutoff_len = cutoff_top_n;
       }
+
     }
     prob_idx = std::vector<std::pair<int, double>>(
         prob_idx.begin(), prob_idx.begin() + cutoff_len);
@@ -116,6 +119,8 @@ std::vector<std::string> split_str(const std::string &s,
 }
 
 bool prefix_compare(const PathTrie *x, const PathTrie *y) {
+  // 按照分数从高到底排序。如果分数相等，则按照字符的编码排序，从小到大排序。
+  // 带来的负面影响是如果存在大小写字母（如x和X，那么优先选择大写字母）
   if (x->score == y->score) {
     if (x->character == y->character) {
       return false;
